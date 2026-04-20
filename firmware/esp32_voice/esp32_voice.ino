@@ -5,9 +5,11 @@
 #include <BLE2902.h>
 #include <math.h>
 
-// ===== PIN =====
+// ===== PIN CONFIG =====
 #define PIEZO_PIN   1
 #define MIC_PIN     0
+#define BTN_PIN     10       // Nút nhấn: nối BTN_PIN → GND (dùng INPUT_PULLUP)
+#define LED_PIN     8       // LED built-in ESP32 C3 SuperMini
 #define WINDOW_SIZE 64
 
 // ===== BLE UUID =====
@@ -20,15 +22,20 @@ bool deviceConnected = false;
 
 // ===== BLE Callbacks =====
 class ServerCallbacks : public BLEServerCallbacks {
-  void onConnect(BLEServer* s)    { deviceConnected = true;  Serial.println("✅ Client connected"); }
+  void onConnect(BLEServer* s) {
+    deviceConnected = true;
+    Serial.println("✅ Client connected");
+    digitalWrite(LED_PIN, HIGH);
+  }
   void onDisconnect(BLEServer* s) {
     deviceConnected = false;
-    Serial.println("❌ Client disconnected, restarting advertising...");
+    Serial.println("❌ Disconnected, advertising...");
+    digitalWrite(LED_PIN, LOW);
     BLEDevice::startAdvertising();
   }
 };
 
-// ===== Feature Extraction (giống dataset.ino) =====
+// ===== Feature Struct =====
 struct Features {
   float piezo_rms;
   float piezo_peak;
@@ -38,6 +45,7 @@ struct Features {
   float ratio;
 };
 
+// ===== Feature Extraction =====
 Features extractFeatures() {
   long pSumSq = 0, mSumSq = 0;
   int  pPeak  = 0;
@@ -68,17 +76,44 @@ Features extractFeatures() {
   f.mic_zcr    = (float)mZcr / WINDOW_SIZE;
   f.mic_energy = (mRMS > 1.0f) ? log10(mRMS) : 0.0f;
   f.ratio      = (mRMS > 1.0f) ? pRMS / mRMS : 0.0f;
-
   return f;
 }
+
+// ===== Button Debounce =====
+bool     btnState     = false;
+bool     lastRaw      = false;
+uint32_t lastDebounce = 0;
+const uint32_t DEBOUNCE_MS = 30;
+
+bool readButton() {
+  bool raw = (digitalRead(BTN_PIN) == LOW); // LOW = pressed (INPUT_PULLUP)
+  if (raw != lastRaw) {
+    lastDebounce = millis();
+    lastRaw = raw;
+  }
+  if ((millis() - lastDebounce) > DEBOUNCE_MS) {
+    btnState = raw;
+  }
+  return btnState;
+}
+
+// ===== State Machine =====
+enum State { IDLE, RECORDING, SEND };
+State state = IDLE;
+
+float acc[6]   = {0};
+int sampleCount = 0;
 
 void setup() {
   Serial.begin(115200);
   analogReadResolution(12);
   analogSetAttenuation(ADC_11db);
 
-  // ===== BLE Init =====
-  BLEDevice::init("ESP32-Sensor"); // Giữ tên cũ để app tìm được
+  pinMode(BTN_PIN, INPUT_PULLUP);
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, LOW);
+
+  BLEDevice::init("ESP32-Sensor");
   pServer = BLEDevice::createServer();
   pServer->setCallbacks(new ServerCallbacks());
 
@@ -91,32 +126,63 @@ void setup() {
 
   pService->start();
   BLEDevice::startAdvertising();
-  Serial.println("🔵 BLE ready, waiting for connection...");
+  Serial.println("🔵 BLE ready. Hold button to record, release to send.");
 }
 
 void loop() {
-  if (deviceConnected) {
-    Features f = extractFeatures();
+  bool btn = readButton();
 
-    // Pack 6 float32 → 24 bytes
-    float payload[6] = {
-      f.piezo_rms,
-      f.piezo_peak,
-      f.mic_rms,
-      f.mic_zcr,
-      f.mic_energy,
-      f.ratio
-    };
+  switch (state) {
 
-    uint8_t buf[24];
-    memcpy(buf, payload, 24);
+    case IDLE:
+      if (btn && deviceConnected) {
+        memset(acc, 0, sizeof(acc));
+        sampleCount = 0;
+        state = RECORDING;
+        Serial.println("🎙️  Recording...");
+        // Blink LED nhanh khi đang ghi
+        digitalWrite(LED_PIN, LOW);
+      }
+      break;
 
-    pCharacteristic->setValue(buf, 24);
-    pCharacteristic->notify();
+    case RECORDING:
+      if (btn) {
+        // Blink LED ~5Hz để báo đang thu
+        digitalWrite(LED_PIN, (millis() / 100) % 2);
 
-    Serial.printf("📡 Sent: rms=%.2f peak=%.2f mic_rms=%.2f zcr=%.3f energy=%.2f ratio=%.3f\n",
-      f.piezo_rms, f.piezo_peak, f.mic_rms, f.mic_zcr, f.mic_energy, f.ratio);
+        Features f = extractFeatures();
+        acc[0] += f.piezo_rms;
+        acc[1] += f.piezo_peak;
+        acc[2] += f.mic_rms;
+        acc[3] += f.mic_zcr;
+        acc[4] += f.mic_energy;
+        acc[5] += f.ratio;
+        sampleCount++;
+      } else {
+        // Button released → send
+        digitalWrite(LED_PIN, deviceConnected ? HIGH : LOW);
+        state = SEND;
+      }
+      break;
+
+    case SEND:
+      if (sampleCount > 0 && deviceConnected) {
+        float payload[6];
+        for (int i = 0; i < 6; i++) payload[i] = acc[i] / sampleCount;
+
+        uint8_t buf[24];
+        memcpy(buf, payload, 24);
+        pCharacteristic->setValue(buf, 24);
+        pCharacteristic->notify();
+
+        Serial.printf("📡 Sent (%d samples avg): piezo_rms=%.2f peak=%.2f mic_rms=%.2f zcr=%.3f energy=%.2f ratio=%.3f\n",
+          sampleCount, payload[0], payload[1], payload[2], payload[3], payload[4], payload[5]);
+      } else if (!deviceConnected) {
+        Serial.println("⚠️  Not connected, data discarded");
+      }
+      state = IDLE;
+      break;
   }
 
-  delay(300); // ~3 predictions/giây
+  delay(10);
 }
