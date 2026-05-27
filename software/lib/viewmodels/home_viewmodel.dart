@@ -26,6 +26,8 @@ class HomeViewModel extends ChangeNotifier {
   bool              _ready       = false;
   int               _predCount   = 0;
 
+  VoiceLabel? _lastSpoken;//
+
   bool _showFeatures = true;
   bool _showHistory  = true;
 
@@ -113,10 +115,21 @@ class HomeViewModel extends ChangeNotifier {
       notifyListeners();
 
       // TTS: đọc nếu không mute, không phải silent, confidence đủ cao
-      if (!settings.isMuted &&
-          result.label != VoiceLabel.silent &&
-          result.confidence >= 0.80) {
-        _tts.speak(result.ttsText);
+      // if (!settings.isMuted && result.confidence >= 0.40) {
+      //   _tts.speak(result.ttsText);
+      // }
+
+      if(!settings.isMuted && (result.confidence >= 0.40 ||
+          (result.label == VoiceLabel.sai && result.confidence >= 0.10)) && result.label != _lastSpoken
+      ){
+
+        _lastSpoken =
+            result.label;
+
+        _tts.speak(
+            result.ttsText
+        );
+
       }
     });
   }

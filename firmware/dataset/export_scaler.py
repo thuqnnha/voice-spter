@@ -4,14 +4,14 @@ Output: scaler_params.json → copy vào assets/ của Flutter project
 """
 import joblib, json
 
-scaler = joblib.load("scaler.save")
+scaler = joblib.load("scaler5.save")
 
 params = {
     "mean": scaler.mean_.tolist(),
     "std":  scaler.scale_.tolist()
 }
 
-with open("scaler_params.json", "w") as f:
+with open("scaler_params5.json", "w") as f:
     json.dump(params, f)
 
 print("✅ Exported scaler_params.json")

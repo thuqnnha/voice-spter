@@ -2,15 +2,18 @@
 
 #define PIEZO_PIN   1
 #define MIC_PIN     0
+#define BTN_PIN     10
 #define WINDOW_SIZE 64
 
-// ===== CHỌN LABEL Ở ĐÂY =====
-// 0 = silent
-// 1 = co
-// 2 = khong
+// ===== LABEL =====
+// 0 = khong
+// 1 = dung
+// 2 = sai
+// 3 = co
+
 int LABEL = 2;
 
-// ---- Feature extraction ----
+// ---- Feature struct ----
 struct SensorFeatures {
   float piezo_rms;
   float piezo_peak;
@@ -20,6 +23,7 @@ struct SensorFeatures {
   float ratio;
 };
 
+// ---- Extract feature ----
 SensorFeatures extractFeatures(int piezoPin, int micPin, int n) {
   long pSumSq = 0, mSumSq = 0;
   int  pPeak  = 0;
@@ -55,27 +59,46 @@ SensorFeatures extractFeatures(int piezoPin, int micPin, int n) {
   return f;
 }
 
+// ---- Setup ----
 void setup() {
   Serial.begin(115200);
+
+  pinMode(BTN_PIN, INPUT_PULLUP);
 
   analogReadResolution(12);
   analogSetAttenuation(ADC_11db);
 
-  delay(2000); // chờ mở serial
+  delay(2000);
 
-  // Header CSV
   Serial.println("piezo_rms,piezo_peak,mic_rms,mic_zcr,mic_energy,ratio,label");
 }
 
+// ---- Loop ----
 void loop() {
-  SensorFeatures f = extractFeatures(PIEZO_PIN, MIC_PIN, WINDOW_SIZE);
 
-  Serial.printf("%.2f,%.2f,%.2f,%.3f,%.2f,%.3f,%d\n",
-    f.piezo_rms, f.piezo_peak,
-    f.mic_rms, f.mic_zcr,
-    f.mic_energy, f.ratio,
-    LABEL
-  );
+  // Nhấn nút (LOW vì pullup)
+  if (digitalRead(BTN_PIN) == LOW) {
 
-  delay(100); // 10 samples/s
+    delay(20); // debounce nhẹ
+
+    if (digitalRead(BTN_PIN) == LOW) {
+      Serial.println("START");
+
+      // Ghi liên tục khi đang giữ nút
+      while (digitalRead(BTN_PIN) == LOW) {
+
+        SensorFeatures f = extractFeatures(PIEZO_PIN, MIC_PIN, WINDOW_SIZE);
+
+        Serial.printf("%.2f,%.2f,%.2f,%.3f,%.2f,%.3f,%d\n",
+          f.piezo_rms, f.piezo_peak,
+          f.mic_rms, f.mic_zcr,
+          f.mic_energy, f.ratio,
+          LABEL
+        );
+      }
+
+      Serial.println("END");
+      delay(300); // tránh ghi trùng
+    }
+  }
 }

@@ -98,11 +98,19 @@ bool readButton() {
 }
 
 // ===== State Machine =====
+// enum State { IDLE, RECORDING, SEND };
+// State state = IDLE;
+
+// float acc[6]   = {0};
+// int sampleCount = 0;
+
+// ===== State Machine =====
 enum State { IDLE, RECORDING, SEND };
 State state = IDLE;
 
-float acc[6]   = {0};
-int sampleCount = 0;
+float best[6]     = {0};
+float bestMicRms  = -1.0f;
+int   sampleCount = 0;
 
 void setup() {
   Serial.begin(115200);
@@ -136,30 +144,34 @@ void loop() {
 
     case IDLE:
       if (btn && deviceConnected) {
-        memset(acc, 0, sizeof(acc));
+        // Reset
+        memset(best, 0, sizeof(best));
+        bestMicRms  = -1.0f;
         sampleCount = 0;
         state = RECORDING;
         Serial.println("🎙️  Recording...");
-        // Blink LED nhanh khi đang ghi
         digitalWrite(LED_PIN, LOW);
       }
       break;
 
     case RECORDING:
       if (btn) {
-        // Blink LED ~5Hz để báo đang thu
         digitalWrite(LED_PIN, (millis() / 100) % 2);
 
         Features f = extractFeatures();
-        acc[0] += f.piezo_rms;
-        acc[1] += f.piezo_peak;
-        acc[2] += f.mic_rms;
-        acc[3] += f.mic_zcr;
-        acc[4] += f.mic_energy;
-        acc[5] += f.ratio;
         sampleCount++;
+
+        // ✅ Giữ lại window có mic_rms cao nhất
+        if (f.mic_rms > bestMicRms) {
+          bestMicRms = f.mic_rms;
+          best[0] = f.piezo_rms;
+          best[1] = f.piezo_peak;
+          best[2] = f.mic_rms;
+          best[3] = f.mic_zcr;
+          best[4] = f.mic_energy;
+          best[5] = f.ratio;
+        }
       } else {
-        // Button released → send
         digitalWrite(LED_PIN, deviceConnected ? HIGH : LOW);
         state = SEND;
       }
@@ -167,16 +179,13 @@ void loop() {
 
     case SEND:
       if (sampleCount > 0 && deviceConnected) {
-        float payload[6];
-        for (int i = 0; i < 6; i++) payload[i] = acc[i] / sampleCount;
-
         uint8_t buf[24];
-        memcpy(buf, payload, 24);
+        memcpy(buf, best, 24);   // ← gửi window tốt nhất
         pCharacteristic->setValue(buf, 24);
         pCharacteristic->notify();
 
-        Serial.printf("📡 Sent (%d samples avg): piezo_rms=%.2f peak=%.2f mic_rms=%.2f zcr=%.3f energy=%.2f ratio=%.3f\n",
-          sampleCount, payload[0], payload[1], payload[2], payload[3], payload[4], payload[5]);
+        Serial.printf("📡 Sent best window (of %d): mic_rms=%.2f zcr=%.3f energy=%.2f ratio=%.3f\n",
+          sampleCount, best[2], best[3], best[4], best[5]);
       } else if (!deviceConnected) {
         Serial.println("⚠️  Not connected, data discarded");
       }

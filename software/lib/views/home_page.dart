@@ -135,21 +135,21 @@ class _PredictionCard extends StatelessWidget {
   const _PredictionCard({required this.vm});
 
   Color _color(VoiceLabel l, BuildContext ctx) => switch (l) {
-    VoiceLabel.yes    => AppColors.yes,
-    VoiceLabel.no     => AppColors.no,
-    VoiceLabel.silent => AppColors.silent,
+    VoiceLabel.khong => AppColors.silent,
+    VoiceLabel.dung    => Colors.orangeAccent,
+    VoiceLabel.sai    => Colors.redAccent,
   };
 
   String _emoji(VoiceLabel l) => switch (l) {
-    VoiceLabel.yes    => '✅',
-    VoiceLabel.no     => '❌',
-    VoiceLabel.silent => '🔇',
+    VoiceLabel.khong => '🔇',
+    VoiceLabel.dung => '💡',
+    VoiceLabel.sai => '🔴',
   };
 
   @override
   Widget build(BuildContext context) {
     final result = vm.lastResult;
-    final label  = result?.label ?? VoiceLabel.silent;
+    final label  = result?.label ?? VoiceLabel.khong;
     final color  = _color(label, context);
     final conf   = result?.confidence ?? 0.0;
 
@@ -240,10 +240,19 @@ class _ConfidenceSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final probs  = vm.lastResult?.probs ?? [0.333, 0.333, 0.334];
-    final labels = ['Silent', 'Có', 'Không'];
-    final colors = [AppColors.silent, AppColors.yes, AppColors.no];
+  final probs = vm.lastResult?.probs ?? List.filled(3, 0.0);
 
+    final labels = [
+      'Không',
+      'Đúng',
+      'Sai',
+    ];
+
+    final colors = [
+      AppColors.silent,
+      Colors.orangeAccent,
+      Colors.redAccent,
+    ];
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -254,19 +263,22 @@ class _ConfidenceSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('PHÂN PHỐI XÁC SUẤT', style: TextStyle(
-            color: context.cTextDim, fontSize: 9, letterSpacing: 2,
-          )),
+          Text('PHÂN PHỐI XÁC SUẤT',
+              style: TextStyle(color: context.cTextDim, fontSize: 9, letterSpacing: 2)),
           const SizedBox(height: 12),
-          ...List.generate(3, (i) => Padding(
+
+          ...List.generate(probs.length, (i) => Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Row(
               children: [
                 SizedBox(
-                  width: 50,
-                  child: Text(labels[i], style: TextStyle(
-                    color: colors[i], fontSize: 11, fontWeight: FontWeight.w600,
-                  )),
+                  width: 70,
+                  child: Text(labels[i],
+                      style: TextStyle(
+                        color: colors[i],
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      )),
                 ),
                 Expanded(
                   child: ClipRRect(
@@ -275,7 +287,7 @@ class _ConfidenceSection extends StatelessWidget {
                       children: [
                         Container(height: 7, color: context.cSurface),
                         AnimatedFractionallySizedBox(
-                          duration: const Duration(milliseconds: 350),
+                          duration: const Duration(milliseconds: 300),
                           widthFactor: probs[i].clamp(0.0, 1.0),
                           child: Container(
                             height: 7,
@@ -291,7 +303,7 @@ class _ConfidenceSection extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 SizedBox(
-                  width: 36,
+                  width: 40,
                   child: Text(
                     '${(probs[i] * 100).toStringAsFixed(0)}%',
                     textAlign: TextAlign.right,
@@ -497,18 +509,18 @@ class _HistoryList extends StatelessWidget {
 
 class _HistoryTile extends StatelessWidget {
   final PredictionResult result;
-  const _HistoryTile({required this.result});
+  _HistoryTile({required this.result});
 
   Color _color() => switch (result.label) {
-    VoiceLabel.yes    => AppColors.yes,
-    VoiceLabel.no     => AppColors.no,
-    VoiceLabel.silent => AppColors.silent,
+    VoiceLabel.khong => AppColors.silent,
+    VoiceLabel.dung    => Colors.orangeAccent,
+    VoiceLabel.sai    => Colors.redAccent,
   };
 
   String _emoji() => switch (result.label) {
-    VoiceLabel.yes    => '✅',
-    VoiceLabel.no     => '❌',
-    VoiceLabel.silent => '🔇',
+    VoiceLabel.khong => '🔇',
+    VoiceLabel.dung    => '💡',
+    VoiceLabel.sai    => '🔴',
   };
 
   @override
