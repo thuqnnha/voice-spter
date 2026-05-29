@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import '../viewmodels/settings_viewmodel.dart';
 
 class TtsService {
   final _tts = FlutterTts();
@@ -41,4 +42,16 @@ class TtsService {
   }
 
   Future<void> stop() async => _tts.stop();
+
+  Future<void> setLanguage(AppLanguage language) async {
+    try {
+      if (language == AppLanguage.vietnamese) {
+        await _tts.setLanguage("vi-VN");
+      } else {
+        await _tts.setLanguage("en-US");
+      }
+    } catch (e) {
+      debugPrint("TTS language error: $e");
+    }
+  }
 }

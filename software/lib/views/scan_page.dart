@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../core/app_localization.dart';
 import '../core/app_theme.dart';
 import '../viewmodels/home_viewmodel.dart';
 import '../viewmodels/settings_viewmodel.dart';
@@ -63,8 +64,8 @@ class ScanPage extends StatelessWidget {
                     child: AnimatedSwitcher(
                       duration: const Duration(milliseconds: 200),
                       child: Text(
-                        key: ValueKey(vm.statusMsg),
-                        vm.statusMsg,
+                        key: ValueKey(vm.getStatusText),
+                        vm.getStatusText(),
                         style: TextStyle(color: context.cTextDim, fontSize: 12, letterSpacing: 1),
                       ),
                     ),
@@ -111,9 +112,14 @@ class _ThemeToggle extends StatelessWidget {
             ),
             const SizedBox(width: 6),
             Text(
-              settings.isDark ? 'Sáng' : 'Tối',
-              style: TextStyle(color: context.cTextDim, fontSize: 11),
-            ),
+              settings.isDark
+                  ? context.txt.lightMode
+                  : context.txt.darkMode,
+              style: TextStyle(
+                color: context.cTextDim,
+                fontSize: 11,
+              ),
+            )
           ],
         ),
       ),
@@ -156,7 +162,7 @@ class _ScanButton extends StatelessWidget {
                 ),
                 const SizedBox(width: 10),
                 Text(
-                  state == AppState.connecting ? 'ĐANG KẾT NỐI...' : 'ĐANG QUÉT...',
+                  state == AppState.connecting ? context.txt.connecting : context.txt.scanning,
                   style: TextStyle(
                     color: context.cAccent, fontSize: 11, letterSpacing: 2,
                   ),
@@ -164,7 +170,7 @@ class _ScanButton extends StatelessWidget {
               ],
             )
                 : Text(
-              'QUÉT THIẾT BỊ',
+              context.txt.scanDevice,
               style: TextStyle(
                 color: context.isDark ? AppColors.darkBg : Colors.white,
                 fontSize: 13,

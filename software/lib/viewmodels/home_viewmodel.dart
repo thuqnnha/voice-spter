@@ -1,19 +1,38 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+
 import '../core/ble_service.dart';
 import '../core/inference_service.dart';
 import '../core/tts_service.dart';
 import 'settings_viewmodel.dart';
 
-export '../core/inference_service.dart' show VoiceLabel, PredictionResult;
+export '../core/inference_service.dart'
+    show VoiceLabel, PredictionResult;
+
 
 enum AppState { scanning, connecting, connected, disconnected }
 
+enum StatusType {
+  notConnected,
+  scanning,
+  connecting,
+  connected,
+  disconnected,
+  deviceNotFound,
+  connectionLost,
+}
+
 class HomeViewModel extends ChangeNotifier {
   final SettingsViewModel settings;
+  void _onSettingsChanged() {
+    notifyListeners();
+    _tts.setLanguage(settings.language);
+  }
 
-  HomeViewModel({required this.settings});
+  HomeViewModel({required this.settings}) {
+    settings.addListener(_onSettingsChanged);
+  }
 
   final _ble       = BleService();
   final _inference = InferenceService();
@@ -22,7 +41,7 @@ class HomeViewModel extends ChangeNotifier {
   AppState          _appState    = AppState.disconnected;
   PredictionResult? _lastResult;
   List<double>      _rawFeatures = [];
-  String            _statusMsg   = 'Chưa kết nối';
+  StatusType _status = StatusType.notConnected;
   bool              _ready       = false;
   int               _predCount   = 0;
 
@@ -36,7 +55,6 @@ class HomeViewModel extends ChangeNotifier {
   AppState          get appState    => _appState;
   PredictionResult? get lastResult  => _lastResult;
   List<double>      get rawFeatures => _rawFeatures;
-  String            get statusMsg   => _statusMsg;
   bool              get ready       => _ready;
   int               get predCount   => _predCount;
   bool              get showFeatures => _showFeatures;
@@ -46,6 +64,31 @@ class HomeViewModel extends ChangeNotifier {
 
   StreamSubscription? _dataSub;
   StreamSubscription? _stateSub;
+
+  String getStatusText() {
+    switch (_status) {
+      case StatusType.notConnected:
+        return settings.strings.notConnected;
+
+      case StatusType.scanning:
+        return settings.strings.scanning;
+
+      case StatusType.connecting:
+        return settings.strings.connecting;
+
+      case StatusType.disconnected:
+        return settings.strings.disconnected;
+
+      case StatusType.deviceNotFound:
+        return settings.strings.deviceNotFound;
+
+      case StatusType.connectionLost:
+        return settings.strings.connectionLost;
+
+      case StatusType.connected:
+        return 'ESP32-Sensor';
+    }
+  }
 
   Future<void> init() async {
     await _inference.init();
@@ -58,8 +101,8 @@ class HomeViewModel extends ChangeNotifier {
   void toggleHistory()  { _showHistory  = !_showHistory;  notifyListeners(); }
 
   void startScan() {
-    _appState  = AppState.scanning;
-    _statusMsg = 'Đang tìm kiếm...';
+    _appState = AppState.scanning;
+    _status = StatusType.scanning;
     notifyListeners();
 
     FlutterBluePlus.startScan(timeout: const Duration(seconds: 8));
@@ -75,28 +118,28 @@ class HomeViewModel extends ChangeNotifier {
 
     Future.delayed(const Duration(seconds: 9), () {
       if (_appState == AppState.scanning) {
-        _appState  = AppState.disconnected;
-        _statusMsg = 'Không tìm thấy thiết bị';
+        _appState = AppState.disconnected;
+        _status = StatusType.deviceNotFound;
         notifyListeners();
       }
     });
   }
 
   Future<void> _connect(BluetoothDevice device) async {
-    _appState  = AppState.connecting;
-    _statusMsg = 'Đang kết nối...';
+    _appState = AppState.connecting;
+    _status = StatusType.connecting;
     notifyListeners();
 
     await _ble.connect(device);
 
-    _appState  = AppState.connected;
-    _statusMsg = 'ESP32-Sensor';
+    _appState = AppState.connected;
+    _status = StatusType.connected;
     notifyListeners();
 
     _stateSub = _ble.stateStream.listen((connected) {
       if (!connected) {
         _appState   = AppState.disconnected;
-        _statusMsg  = 'Mất kết nối';
+        _status = StatusType.connectionLost;
         _lastResult = null;
         notifyListeners();
       }
@@ -139,7 +182,7 @@ class HomeViewModel extends ChangeNotifier {
     await _stateSub?.cancel();
     await _ble.disconnect();
     _appState   = AppState.disconnected;
-    _statusMsg  = 'Đã ngắt kết nối';
+    _status = StatusType.disconnected;
     _lastResult = null;
     notifyListeners();
   }
@@ -151,6 +194,7 @@ class HomeViewModel extends ChangeNotifier {
     _ble.dispose();
     _inference.close();
     _tts.stop();
+    settings.removeListener(_onSettingsChanged);
     super.dispose();
   }
 }

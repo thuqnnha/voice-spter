@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../core/app_localization.dart';
 import '../core/app_theme.dart';
 import '../viewmodels/home_viewmodel.dart';
 import '../viewmodels/settings_viewmodel.dart';
@@ -25,14 +26,14 @@ class HomePage extends StatelessWidget {
                       _ConfidenceSection(vm: vm),
                       const SizedBox(height: 12),
                       _CollapsibleSection(
-                        title: 'RAW FEATURES',
+                        title: context.txt.rawFeatures,
                         visible: vm.showFeatures,
                         onToggle: vm.toggleFeatures,
                         child: _FeaturesGrid(vm: vm),
                       ),
                       const SizedBox(height: 12),
                       _CollapsibleSection(
-                        title: 'LỊCH SỬ',
+                        title: context.txt.history,
                         visible: vm.showHistory,
                         onToggle: vm.toggleHistory,
                         child: _HistoryList(vm: vm),
@@ -87,7 +88,7 @@ class _Header extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  vm.statusMsg,
+                  vm.getStatusText(),
                   style: TextStyle(color: context.cTextDim, fontSize: 10),
                 ),
               ],
@@ -98,11 +99,39 @@ class _Header extends StatelessWidget {
           _MiniChip(label: 'PRED', value: '${vm.predCount}', context: context),
           const SizedBox(width: 6),
 
+          InkWell(
+            onTap: settings.toggleLanguage,
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 4,
+              ),
+              decoration: BoxDecoration(
+                border: Border.all(color: context.cBorder),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                settings.language == AppLanguage.vietnamese
+                    ? 'VN'
+                    : 'EN',
+                style: TextStyle(
+                  color: context.cAccent,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 11,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+
           // Mute toggle
           _IconBtn(
             icon: settings.isMuted ? Icons.volume_off : Icons.volume_up,
             color: settings.isMuted ? AppColors.no : context.cAccent,
-            tooltip: settings.isMuted ? 'Bật tiếng' : 'Tắt tiếng',
+            tooltip: settings.isMuted
+                ? context.txt.muteOn
+                : context.txt.muteOff,
             onTap: settings.toggleMute,
           ),
 
@@ -110,7 +139,9 @@ class _Header extends StatelessWidget {
           _IconBtn(
             icon: settings.isDark ? Icons.light_mode : Icons.dark_mode,
             color: context.cTextDim,
-            tooltip: settings.isDark ? 'Chế độ sáng' : 'Chế độ tối',
+            tooltip: settings.isDark
+                ? context.txt.lightMode
+                : context.txt.darkMode,
             onTap: settings.toggleTheme,
           ),
 
@@ -118,7 +149,7 @@ class _Header extends StatelessWidget {
           _IconBtn(
             icon: Icons.bluetooth_disabled,
             color: AppColors.no.withOpacity(0.8),
-            tooltip: 'Ngắt kết nối',
+            tooltip: context.txt.disconnect,
             onTap: () => context.read<HomeViewModel>().disconnect(),
           ),
         ],
@@ -145,6 +176,22 @@ class _PredictionCard extends StatelessWidget {
     VoiceLabel.dung => '💡',
     VoiceLabel.sai => '🔴',
   };
+
+  String _labelText(
+      VoiceLabel label,
+      BuildContext context,
+      ) {
+    switch (label) {
+      case VoiceLabel.khong:
+        return context.txt.silence;
+
+      case VoiceLabel.dung:
+        return context.txt.correct;
+
+      case VoiceLabel.sai:
+        return context.txt.incorrect;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -176,10 +223,7 @@ class _PredictionCard extends StatelessWidget {
       child: Column(
         children: [
           Text(
-            'NHẬN DẠNG GIỌNG NÓI',
-            style: TextStyle(
-              color: context.cTextDim, fontSize: 9, letterSpacing: 2.5,
-            ),
+            context.txt.voiceRecognition,
           ),
           const SizedBox(height: 18),
           AnimatedSwitcher(
@@ -190,7 +234,9 @@ class _PredictionCard extends StatelessWidget {
                 Text(_emoji(label), style: const TextStyle(fontSize: 52)),
                 const SizedBox(height: 6),
                 Text(
-                  (result?.labelText ?? '—').toUpperCase(),
+                  result == null
+                      ? '—'
+                      : _labelText(result.label, context).toUpperCase(),
                   style: TextStyle(
                     color: color,
                     fontSize: 38,
@@ -213,7 +259,7 @@ class _PredictionCard extends StatelessWidget {
                     children: [
                       Icon(Icons.volume_off, size: 12, color: AppColors.no),
                       const SizedBox(width: 4),
-                      Text('TẮT TIẾNG', style: TextStyle(
+                      Text(context.txt.muted, style: TextStyle(
                         color: AppColors.no, fontSize: 9, letterSpacing: 1.5,
                       )),
                     ],
@@ -242,11 +288,11 @@ class _ConfidenceSection extends StatelessWidget {
   Widget build(BuildContext context) {
   final probs = vm.lastResult?.probs ?? List.filled(3, 0.0);
 
-    final labels = [
-      'Không',
-      'Đúng',
-      'Sai',
-    ];
+  final labels = [
+    context.txt.silence,
+    context.txt.correct,
+    context.txt.incorrect,
+  ];
 
     final colors = [
       AppColors.silent,
@@ -263,7 +309,8 @@ class _ConfidenceSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('PHÂN PHỐI XÁC SUẤT',
+          Text(
+              context.txt.probability,
               style: TextStyle(color: context.cTextDim, fontSize: 9, letterSpacing: 2)),
           const SizedBox(height: 12),
 
@@ -413,7 +460,7 @@ class _FeaturesGrid extends StatelessWidget {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
         child: Text(
-          'Chưa có dữ liệu',
+          context.txt.noData,
           style: TextStyle(color: context.cTextDim, fontSize: 12),
         ),
       );
@@ -496,7 +543,7 @@ class _HistoryList extends StatelessWidget {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
         child: Text(
-          'Chưa có lịch sử',
+          context.txt.noHistory,
           style: TextStyle(color: context.cTextDim, fontSize: 12),
         ),
       );
@@ -523,6 +570,19 @@ class _HistoryTile extends StatelessWidget {
     VoiceLabel.sai    => '🔴',
   };
 
+  String _labelText(BuildContext context) {
+    switch (result.label) {
+      case VoiceLabel.khong:
+        return context.txt.silence;
+
+      case VoiceLabel.dung:
+        return context.txt.correct;
+
+      case VoiceLabel.sai:
+        return context.txt.incorrect;
+    }
+  }
+
   @override
   Widget build(BuildContext context) => Container(
     margin: const EdgeInsets.only(bottom: 6),
@@ -538,7 +598,7 @@ class _HistoryTile extends StatelessWidget {
         const SizedBox(width: 8),
         Expanded(
           child: Text(
-            result.labelText,
+            _labelText(context),
             style: TextStyle(
               color: _color(), fontWeight: FontWeight.w600, fontSize: 13,
             ),
